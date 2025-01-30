@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Editor Estilo Excel</title>
+  <style>
+    /* Reset básico */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f9;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Área de Entrada */
+    .input-area {
+      background-color: #ffffff;
+      padding: 20px;
+      border-bottom: 1px solid #ddd;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .editable-div {
+      width: 100%;
+      height: 120px;
+      padding: 10px 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+      line-height: 1.5;
+      resize: vertical;
+      overflow-y: auto;
+      transition: border-color 0.3s;
+    }
+
+    .editable-div:focus {
+      outline: none;
+      border-color: #007BFF;
+      box-shadow: 0 0 5px rgba(0,123,255,0.5);
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      background-color: #007BFF;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    /* Container das Linhas */
+    .container {
+      flex: 1;
+      padding: 20px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow-y: auto;
+    }
+
+    /* Cada "linha" (bloco) */
+    .box {
+      background-color: #f0f0f0; 
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      height: 45px;            /* Altura fixa p/ texto */
+      display: flex;
+      align-items: center;     /* Centraliza vertical */
+      padding: 0 15px;
+      font-size: 16px;
+      transition: background-color 0.3s, height 0.3s, border-color 0.3s;
+      cursor: text;
+      position: relative;
+      width: 100%;
+      overflow: hidden;        /* Corta o que exceder */
+      white-space: nowrap;     /* Uma só linha */
+      text-overflow: ellipsis; /* Reticências se exceder largura */
+    }
+
+    .box.colored {
+      height: 50px;
+      background-color: #e6f2ff;
+    }
+
+    /* Foco no bloco */
+    .box:focus-within {
+      border-color: #007BFF;
+      box-shadow: 0 0 5px rgba(0,123,255,0.3);
+      background-color: #e6f2ff;
+    }
+
+    /* Efeito de Hover */
+    .box:hover {
+      border-color: #007BFF;
+    }
+
+    /* Menu de Contexto Personalizado */
+    .custom-context-menu {
+      position: absolute;
+      background-color: #ffffff;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      padding: 10px 0;
+      z-index: 1000;
+      width: 220px;
+      display: none;
+      border-radius: 6px;
+    }
+
+    .custom-context-menu ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .custom-context-menu li {
+      padding: 10px 20px;
+      cursor: pointer;
+      position: relative;
+      transition: background-color 0.2s;
+    }
+
+    .custom-context-menu li:hover {
+      background-color: #f1f1f1;
+    }
+
+    /* Submenu */
+    .submenu {
+      position: relative;
+    }
+
+    .submenu > ul {
+      position: absolute;
+      top: 0;
+      left: 100%;
+      background-color: #ffffff;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      padding: 10px 0;
+      display: none;
+      border-radius: 6px;
+      min-width: 150px;
+      z-index: 1001;
+    }
+
+    .submenu:hover > ul {
+      display: block;
+    }
+
+    .submenu::after {
+      content: '▶';
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* Responsividade */
+    @media (max-width: 600px) {
+      .editable-div, button, .box {
+        font-size: 14px;
+      }
+
+      .custom-context-menu {
+        width: 180px;
+      }
+
+      .submenu > ul {
+        min-width: 120px;
+      }
+    }
+
+    /* Tabela e #texto (se precisar) */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid orange;
+    }
+    th {
+      background-color: orange;
+      text-align: left;
+      padding: 8px;
+    }
+    td {
+      min-height: 25px;
+      vertical-align: top;
+      padding: 8px;
+    }
+    #texto {
+      width: 100%;
+      height: 250px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <!-- Área de Entrada -->
+  <div class="input-area" id="inputArea">
+    <div class="editable-div" id="textInput" contenteditable="true" placeholder="Cole seu texto aqui..."></div>
+    <button onclick="processText()">Gerar Texto</button>
+  </div>
+
+  <!-- Container das Linhas -->
+  <div class="container" id="textContainer"></div>
+
+  <!-- Menu de Contexto Personalizado -->
+  <div class="custom-context-menu" id="contextMenu">
+    <ul>
+      <li id="deleteBlock">Excluir Bloco</li>
+      <li id="centerImageInsideBlock">Centralizar Imagem no Bloco</li><!-- NOVA OPÇÃO -->
+      <li class="submenu">Alterar Tamanho da Fonte
+        <ul>
+          <li data-font-size="14px">14px</li>
+          <li data-font-size="16px">16px</li>
+          <li data-font-size="18px">18px</li>
+          <li data-font-size="20px">20px</li>
+          <li data-font-size="22px">22px</li>
+        </ul>
+      </li>
+      <li class="submenu">Alterar Cor da Linha
+        <ul>
+          <li data-color="#f0f0f0">Cinza Claro</li>
+          <li data-color="#00B050">Verde</li>
+          <li data-color="#FFC000">Amarelo</li>
+          <li data-color="#00B0F0">Azul</li>
+          <li data-color="#00C0C0">Turquesa</li>
+          <li data-color="#F79646">Laranja</li>
+          <li data-color="#FF00FF">Magenta</li>
+          <li data-color="#00FF00">Verde Vibrante</li>
+          <li data-color="#FFFF00">Amarelo Vibrante</li>
+          <li data-color="#FF69B4">Rosa Shock</li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+
+  <script>
+    /* 
+     * Lista de cores removendo Vermelho, Roxo, Vinho, Azul Forte e Lilás
+     */
+    const colorSequence = [
+      "#f0f0f0",
+      "#00B050",
+      "#FFC000",
+      "#00B0F0",
+      "#00C0C0",
+      "#F79646",
+      "#FF00FF",
+      "#00FF00",
+      "#FFFF00",
+      "#FF69B4"
+    ];
+
+    const defaultFontSize = "16px";
+
+    function processText() {
+      const container = document.getElementById("textContainer");
+      const inputArea = document.getElementById("inputArea");
+      const textInput = document.getElementById("textInput");
+      inputArea.style.display = "none";
+      container.innerHTML = "";
+
+      const htmlContent = textInput.innerHTML;
+
+      const tempContainer = document.createElement("div");
+      tempContainer.innerHTML = htmlContent;
+      const childNodes = Array.from(tempContainer.childNodes);
+
+      childNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE ||
+           (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== "")) {
+          createEditableBox(node.outerHTML || node.textContent, container);
+        }
+      });
+    }
+
+    function createEditableBox(content, container) {
+      const box = document.createElement("div");
+      box.classList.add("box");
+      box.setAttribute("contenteditable", "true");
+      box.innerHTML = content;
+
+      let currentColorIndex = 0;
+      box.style.backgroundColor = colorSequence[currentColorIndex];
+      box.style.fontSize = defaultFontSize;
+      box.setAttribute('data-color-index', currentColorIndex);
+
+      capitalizeFirstLetter(box);
+
+      // Duplo clique para alternar cores
+      box.addEventListener("dblclick", () => {
+        currentColorIndex = (currentColorIndex + 1) % colorSequence.length;
+        box.style.backgroundColor = colorSequence[currentColorIndex];
+        box.setAttribute('data-color-index', currentColorIndex);
+
+        if (colorSequence[currentColorIndex] !== "#f0f0f0") {
+          box.classList.add("colored");
+        } else {
+          box.classList.remove("colored");
+        }
+      });
+
+      // Enter cria nova linha (sem shift)
+      box.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+
+          const selection = window.getSelection();
+          if (!selection.rangeCount) return;
+          const range = selection.getRangeAt(0);
+
+          const rangeClone = range.cloneRange();
+          rangeClone.selectNodeContents(box);
+          rangeClone.setStart(range.endContainer, range.endOffset);
+
+          const afterContent = rangeClone.extractContents();
+
+          const newBox = createEditableBox("", container);
+          newBox.appendChild(afterContent);
+          container.insertBefore(newBox, box.nextSibling);
+          newBox.focus();
+
+          capitalizeFirstLetter(newBox);
+        }
+      });
+
+      // Context menu personalizado
+      box.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        showContextMenu(event.pageX, event.pageY, box);
+      });
+
+      // Capitalizar primeira letra após cada alteração
+      box.addEventListener("input", () => {
+        capitalizeFirstLetter(box);
+      });
+
+      /*
+       * NOVO TRECHO: Ao colar uma imagem no bloco,
+       * ajusta automaticamente o bloco para caber e centralizar a imagem.
+       */
+      box.addEventListener("paste", (event) => {
+        event.preventDefault();
+        const clipboardData = (event.clipboardData || window.clipboardData);
+        const text = clipboardData.getData("text/html") || clipboardData.getData("text/plain");
+
+        if (clipboardData.files && clipboardData.files.length > 0) {
+          const file = clipboardData.files[0];
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const img = document.createElement("img");
+            img.src = e.target.result;
+            img.alt = "Imagem colada";
+
+            // Mantém a imagem centralizada
+            img.style.display = "block";
+            img.style.margin = "0 auto";
+            img.style.maxWidth = "100%";
+            img.style.height = "auto";
+
+            // Insere a imagem
+            document.execCommand("insertHTML", false, img.outerHTML);
+
+            // Ajusta o bloco para comportar a imagem
+            box.style.height = "auto";
+            box.style.overflow = "visible";
+            box.style.whiteSpace = "normal";
+            box.style.alignItems = "center";
+            box.style.justifyContent = "center";
+            box.style.padding = "10px";
+          };
+          reader.readAsDataURL(file);
+        } else {
+          // Se for texto comum, insere normalmente
+          document.execCommand("insertHTML", false, text);
+        }
+      });
+
+      container.appendChild(box);
+      return box;
+    }
+
+    function capitalizeFirstLetter(box) {
+      const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT, null, false);
+      let textNode = walker.nextNode();
+      while (textNode) {
+        const text = textNode.nodeValue.trim();
+        if (text.length > 0) {
+          const firstChar = text.charAt(0);
+          const firstCharUpper = firstChar.toUpperCase();
+          if (firstChar !== firstCharUpper) {
+            textNode.nodeValue = firstCharUpper + textNode.nodeValue.slice(1);
+          }
+          break;
+        }
+        textNode = walker.nextNode();
+      }
+    }
+
+    // Colagem de imagens e textos no "textInput"
+    document.getElementById("textInput").addEventListener("paste", function(event) {
+      event.preventDefault();
+      const clipboardData = (event.clipboardData || window.clipboardData);
+      const text = clipboardData.getData("text/html") || clipboardData.getData("text/plain");
+
+      if (clipboardData.files && clipboardData.files.length > 0) {
+        const file = clipboardData.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = document.createElement("img");
+          img.src = e.target.result;
+          img.alt = "Imagem colada";
+
+          // Por enquanto, centraliza somente na horizontal
+          img.style.display = "block";
+          img.style.margin = "0 auto";
+          img.style.maxWidth = "100%";
+          img.style.height = "auto";
+
+          document.execCommand("insertHTML", false, img.outerHTML);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        document.execCommand("insertHTML", false, text);
+      }
+    });
+
+    // Ctrl+N cria novo bloco
+    function addNewBlock(event) {
+      if (event.ctrlKey && event.key === 'n') {
+        event.preventDefault();
+        const container = document.getElementById("textContainer");
+        const activeBox = document.querySelector(".box:focus");
+        if (activeBox) {
+          const newBox = createEditableBox("<br>", container);
+          container.insertBefore(newBox, activeBox.nextSibling);
+          newBox.focus();
+          capitalizeFirstLetter(newBox);
+        }
+      }
+    }
+    document.addEventListener("keydown", addNewBlock);
+
+    // Fecha menu de contexto ao clicar fora
+    document.addEventListener("click", (event) => {
+      const contextMenu = document.getElementById("contextMenu");
+      if (contextMenu.style.display === "block") {
+        contextMenu.style.display = "none";
+      }
+    });
+
+    // Exibe o menu de contexto personalizado
+    function showContextMenu(x, y, box) {
+      const contextMenu = document.getElementById("contextMenu");
+      contextMenu.style.top = `${y}px`;
+      contextMenu.style.left = `${x}px`;
+      contextMenu.style.display = "block";
+      contextMenu.currentBox = box;
+    }
+
+    // "Excluir Bloco"
+    document.getElementById("deleteBlock").addEventListener("click", () => {
+      const contextMenu = document.getElementById("contextMenu");
+      const box = contextMenu.currentBox;
+      if (box && box.parentNode) {
+        box.parentNode.removeChild(box);
+      }
+      contextMenu.style.display = "none";
+    });
+
+    // NOVA OPÇÃO: "Centralizar Imagem no Bloco"
+    document.getElementById("centerImageInsideBlock").addEventListener("click", () => {
+      const contextMenu = document.getElementById("contextMenu");
+      const box = contextMenu.currentBox;
+      if (box) {
+        box.style.height = "auto";             // Cresce conforme imagem
+        box.style.overflow = "visible";        // Não corta
+        box.style.whiteSpace = "normal";       // Permite quebrar linha
+        box.style.alignItems = "center";       // Centraliza vertical
+        box.style.justifyContent = "center";   // Centraliza horizontal
+        box.style.padding = "10px";            // Espaço interno p/ não encostar nas bordas
+      }
+      contextMenu.style.display = "none";
+    });
+
+    // "Alterar Tamanho da Fonte"
+    const fontSizeOptions = document.querySelectorAll('.submenu ul li[data-font-size]');
+    fontSizeOptions.forEach(option => {
+      option.addEventListener('click', () => {
+        const contextMenu = document.getElementById("contextMenu");
+        const box = contextMenu.currentBox;
+        const newFontSize = option.getAttribute('data-font-size');
+        if (box && newFontSize) {
+          box.style.fontSize = newFontSize;
+        }
+        contextMenu.style.display = "none";
+      });
+    });
+
+    // "Alterar Cor da Linha"
+    const colorOptions = document.querySelectorAll('.submenu ul li[data-color]');
+    colorOptions.forEach(option => {
+      option.addEventListener('click', () => {
+        const contextMenu = document.getElementById("contextMenu");
+        const box = contextMenu.currentBox;
+        const newColor = option.getAttribute('data-color');
+        if (box) {
+          box.style.backgroundColor = newColor;
+          if (newColor !== "#f0f0f0") {
+            box.classList.add("colored");
+          } else {
+            box.classList.remove("colored");
+          }
+        }
+        contextMenu.style.display = "none";
+      });
+    });
+  </script>
+</body>
+</html>
